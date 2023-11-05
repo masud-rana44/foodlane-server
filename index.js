@@ -7,6 +7,7 @@ const app = express();
 
 // middlewares
 app.use(cors());
+app.use(express.json());
 
 app.get("/", (req, res) => {
   res.send("Hello from API");
@@ -52,12 +53,13 @@ async function run() {
       try {
         const page = parseInt(req.query.page) || 1;
         const size = parseInt(req.query.size) || 10;
-        console.log(page, size);
+
         const result = await foodsCollection
           .find()
           .skip((page - 1) * size)
           .limit(size)
           .toArray();
+
         res.status(200).send(result);
       } catch (error) {
         console.log("FOOD_GET", error);
@@ -131,14 +133,39 @@ async function run() {
     // Order collection
     const ordersCollection = db.collection("orders");
 
+    app.get("/orders", async (req, res) => {
+      try {
+        const email = req.query.email;
+        const query = { buyerEmail: email };
+
+        const result = await ordersCollection.find(query).toArray();
+        res.status(200).send(result);
+      } catch (error) {
+        console.log("ORDER_GET", error);
+        res.status(500).send({ message: "Internal error" });
+      }
+    });
+
     app.post("/orders", async (req, res) => {
       try {
         const newOrder = req.body;
         const result = await ordersCollection.insertOne(newOrder);
-        console.log("Got new order", req.body);
         res.status(201).send(result);
       } catch (error) {
         console.log("ORDER_POST", error);
+        res.status(500).send({ message: "Internal error" });
+      }
+    });
+
+    app.delete("/orders/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+
+        const result = await ordersCollection.deleteOne(query);
+        res.status(204).send(result);
+      } catch (error) {
+        console.log("ORDER_DELETE", error);
         res.status(500).send({ message: "Internal error" });
       }
     });
