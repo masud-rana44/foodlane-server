@@ -5,6 +5,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 
+// middlewares
+app.use(cors());
+
 app.get("/", (req, res) => {
   res.send("Hello from API");
 });
@@ -25,15 +28,15 @@ async function run() {
   try {
     // Connect the client to the server
     await client.connect();
-    const db = client.db("FoodLane");
+    const db = client.db("FoodLaneDB");
 
     // User collection
-    const userCollection = db.collection("user");
+    const usersCollection = db.collection("users");
 
     app.post("/users", async (req, res) => {
       try {
         const newUser = req.body;
-        const result = await userCollection.insertOne(newUser);
+        const result = await usersCollection.insertOne(newUser);
         console.log("Got new user", req.body);
         res.status(201).send(result);
       } catch (error) {
@@ -43,12 +46,18 @@ async function run() {
     });
 
     // Food collection
-    const foodCollection = db.collection("food");
+    const foodsCollection = db.collection("foods");
 
     app.get("/foods", async (req, res) => {
       try {
-        const result = await foodCollection.find({}).toArray();
-        console.log("Got foods", result);
+        const page = parseInt(req.query.page) || 1;
+        const size = parseInt(req.query.size) || 10;
+        console.log(page, size);
+        const result = await foodsCollection
+          .find()
+          .skip((page - 1) * size)
+          .limit(size)
+          .toArray();
         res.status(200).send(result);
       } catch (error) {
         console.log("FOOD_GET", error);
@@ -61,7 +70,7 @@ async function run() {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
 
-        const result = await foodCollection.findOne(query, {});
+        const result = await foodsCollection.findOne(query, {});
         console.log("Got food", result);
 
         res.status(200).send(result);
@@ -74,7 +83,7 @@ async function run() {
     app.post("/foods", async (req, res) => {
       try {
         const newFood = req.body;
-        const result = await foodCollection.insertOne(newFood);
+        const result = await foodsCollection.insertOne(newFood);
         console.log("Got new food", req.body);
         res.status(201).send(result);
       } catch (error) {
@@ -93,7 +102,7 @@ async function run() {
         };
         const options = { upsert: false };
 
-        const result = await foodCollection.updateOne(
+        const result = await foodsCollection.updateOne(
           filter,
           updatedFood,
           options
@@ -110,11 +119,26 @@ async function run() {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
-        const result = await foodCollection.deleteOne(query);
+        const result = await foodsCollection.deleteOne(query);
         console.log("Deleted food", result);
         res.status(204).send(result);
       } catch (error) {
         console.log("FOOD_DELETE", error);
+        res.status(500).send({ message: "Internal error" });
+      }
+    });
+
+    // Order collection
+    const ordersCollection = db.collection("orders");
+
+    app.post("/orders", async (req, res) => {
+      try {
+        const newOrder = req.body;
+        const result = await ordersCollection.insertOne(newOrder);
+        console.log("Got new order", req.body);
+        res.status(201).send(result);
+      } catch (error) {
+        console.log("ORDER_POST", error);
         res.status(500).send({ message: "Internal error" });
       }
     });
