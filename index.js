@@ -67,17 +67,39 @@ async function run() {
       }
     });
 
+    app.get("/foods/user/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const query = { sellerEmail: email };
+
+        const result = await foodsCollection.find(query).toArray();
+        res.status(200).send(result);
+      } catch (error) {
+        console.log("FOOD_EMAIL_GET", error);
+        res.status(500).send({ message: "Internal error" });
+      }
+    });
+
     app.get("/foods/:id", async (req, res) => {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
 
         const result = await foodsCollection.findOne(query, {});
-        console.log("Got food", result);
 
         res.status(200).send(result);
       } catch (error) {
         console.log("FOOD_ID_GET", error);
+        res.status(500).send({ message: "Internal error" });
+      }
+    });
+
+    app.get("/count/foods", async (req, res) => {
+      try {
+        const result = await foodsCollection.countDocuments({});
+        res.status(200).send({ count: result });
+      } catch (error) {
+        console.log("FOOD_COUNT_GET", error);
         res.status(500).send({ message: "Internal error" });
       }
     });
@@ -149,6 +171,27 @@ async function run() {
     app.post("/orders", async (req, res) => {
       try {
         const newOrder = req.body;
+
+        // extract quantity from order
+        const quantity = parseInt(newOrder.quantity);
+        const foodId = newOrder.foodId;
+
+        // update food quantity
+        const filter = { _id: new ObjectId(foodId) };
+        const updated = {
+          $inc: { quantity: -quantity },
+        };
+        const options = { upsert: false };
+
+        // get the food
+        const food = await foodsCollection.findOne(filter, {});
+
+        const digitalFood = await foodsCollection.updateOne(
+          filter,
+          updatedFood,
+          options
+        );
+
         const result = await ordersCollection.insertOne(newOrder);
         res.status(201).send(result);
       } catch (error) {
