@@ -104,6 +104,21 @@ async function run() {
       }
     });
 
+    app.get("/top/foods", async (req, res) => {
+      try {
+        const result = await foodsCollection
+          .find()
+          .sort({ orderCount: -1 })
+          .limit(6)
+          .toArray();
+        console.log(result);
+        res.status(200).send(result);
+      } catch (error) {
+        console.log("FOOD_TOP_GET", error);
+        res.status(500).send({ message: "Internal error" });
+      }
+    });
+
     app.post("/foods", async (req, res) => {
       try {
         const newFood = req.body;
@@ -196,11 +211,9 @@ async function run() {
           $inc: { quantity: -quantity, orderCount: food.orderCount + 1 },
         };
         const options = { upsert: false };
-
         await foodsCollection.updateOne(filter, updatedFood, options);
 
         const result = await ordersCollection.insertOne(newOrder);
-        console.log("Got new order", req.body);
         res.status(201).send(result);
       } catch (error) {
         console.log("ORDER_POST", error);
