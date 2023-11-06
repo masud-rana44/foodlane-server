@@ -176,23 +176,31 @@ async function run() {
         const quantity = parseInt(newOrder.quantity);
         const foodId = newOrder.foodId;
 
-        // update food quantity
         const filter = { _id: new ObjectId(foodId) };
-        const updated = {
-          $inc: { quantity: -quantity },
-        };
-        const options = { upsert: false };
 
         // get the food
         const food = await foodsCollection.findOne(filter, {});
 
-        const digitalFood = await foodsCollection.updateOne(
-          filter,
-          updatedFood,
-          options
-        );
+        // check if buyer is not seller
+        if (food.sellerEmail === newOrder.buyerEmail)
+          return res
+            .status(400)
+            .send({ message: "You cannot buy your own food" });
+
+        // check if food quantity is enough
+        if (food.quantity < quantity)
+          return res.status(400).send({ message: "Not enough food" });
+
+        // update food quantity
+        const updatedFood = {
+          $inc: { quantity: -quantity, orderCount: food.orderCount + 1 },
+        };
+        const options = { upsert: false };
+
+        await foodsCollection.updateOne(filter, updatedFood, options);
 
         const result = await ordersCollection.insertOne(newOrder);
+        console.log("Got new order", req.body);
         res.status(201).send(result);
       } catch (error) {
         console.log("ORDER_POST", error);
