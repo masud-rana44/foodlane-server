@@ -1,13 +1,39 @@
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 
 // middlewares
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173"],
+    credentials: true,
+  })
+);
 app.use(express.json());
+app.use(cookieParser());
+
+const verify = (req, res, next) => {
+  const token = req.cookies.token;
+  console.log(token);
+  if (!token) {
+    return res.status(401).send("Access Denied");
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    // If token is invalid, respond with 401 (unauthorized)
+    if (err) {
+      console.log(err);
+      return res.status(401).send({ message: "Unauthorized" });
+    }
+    // If token is valid, extract the user payload from the token and set to the req.body
+    next();
+  });
+};
 
 app.get("/", (req, res) => {
   res.send("Hello from API");
@@ -30,6 +56,21 @@ async function run() {
     // Connect the client to the server
     await client.connect();
     const db = client.db("FoodLaneDB");
+
+    // JWT
+    app.post("/jwt", (req, res) => {
+      const token = jwt.sign(req.body, process.env.JWT_SECRET, {
+        expiresIn: "1h",
+      });
+      console.log(token, req.body);
+
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: false,
+      });
+
+      res.send({ status: "success" });
+    });
 
     // User collection
     const usersCollection = db.collection("users");
@@ -134,6 +175,7 @@ async function run() {
         const id = req.params.id;
 
         const filter = { _id: new ObjectId(id) };
+        delete req.body._id;
         const updatedFood = {
           $set: req.body,
         };
@@ -144,7 +186,6 @@ async function run() {
           updatedFood,
           options
         );
-        console.log("Updated food", result);
         res.status(200).send(result);
       } catch (error) {
         console.log(error);
