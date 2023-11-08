@@ -10,7 +10,11 @@ const app = express();
 // middlewares
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: [
+      "http://localhost:5173",
+      "https://resturent-assignment.web.app/",
+      "https://resturent-assignment.web.app/",
+    ],
     credentials: true,
   })
 );
@@ -18,19 +22,17 @@ app.use(express.json());
 app.use(cookieParser());
 
 const verify = (req, res, next) => {
-  const token = req.cookies.token;
-  console.log(token);
+  const token = req?.cookies?.token;
+  // console.log('token in the middleware', token);
+  // no token available
   if (!token) {
-    return res.status(401).send("Access Denied");
+    return res.status(401).send({ message: "unauthorized access" });
   }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    // If token is invalid, respond with 401 (unauthorized)
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      console.log(err);
-      return res.status(401).send({ message: "Unauthorized" });
+      return res.status(401).send({ message: "unauthorized access" });
     }
-    // If token is valid, extract the user payload from the token and set to the req.body
+    req.user = decoded;
     next();
   });
 };
@@ -54,22 +56,30 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server
-    await client.connect();
+    // await client.connect();
     const db = client.db("FoodLaneDB");
 
-    // JWT
-    app.post("/jwt", (req, res) => {
-      const token = jwt.sign(req.body, process.env.JWT_SECRET, {
+    // auth related api
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      console.log("user for token", user);
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: "1h",
       });
-      console.log(token, req.body);
 
-      res.cookie("token", token, {
-        httpOnly: true,
-        secure: false,
-      });
+      res
+        .cookie("token", token, {
+          httpOnly: true,
+          secure: true,
+          sameSite: "none",
+        })
+        .send({ success: true });
+    });
 
-      res.send({ status: "success" });
+    app.post("/logout", async (req, res) => {
+      const user = req.body;
+      console.log("logging out", user);
+      res.clearCookie("token", { maxAge: 0 }).send({ success: true });
     });
 
     // User collection
@@ -151,7 +161,6 @@ async function run() {
           .sort({ orderCount: -1 })
           .limit(6)
           .toArray();
-        console.log(result);
         res.status(200).send(result);
       } catch (error) {
         console.log("FOOD_TOP_GET", error);
@@ -159,7 +168,7 @@ async function run() {
       }
     });
 
-    app.post("/foods", async (req, res) => {
+    app.post("/foods", verify, async (req, res) => {
       try {
         const newFood = req.body;
         const result = await foodsCollection.insertOne(newFood);
@@ -170,7 +179,7 @@ async function run() {
       }
     });
 
-    app.patch("/foods/:id", async (req, res) => {
+    app.patch("/foods/:id", verify, async (req, res) => {
       try {
         const id = req.params.id;
 
@@ -193,7 +202,7 @@ async function run() {
       }
     });
 
-    app.delete("/foods/:id", async (req, res) => {
+    app.delete("/foods/:id", verify, async (req, res) => {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
@@ -208,10 +217,20 @@ async function run() {
     // Order collection
     const ordersCollection = db.collection("orders");
 
-    app.get("/orders", async (req, res) => {
+    app.get("/orders", verify, async (req, res) => {
       try {
+        if (req.user.email !== req.query.email) {
+          return res.status(403).send({ message: "forbidden access" });
+        }
+        let query = {};
+        if (req.query?.email) {
+          query = { email: req.query.email };
+        }
+
+        console.log(req.query.email, req.query);
+
         const email = req.query.email;
-        const query = { buyerEmail: email };
+        query = { buyerEmail: email };
 
         const result = await ordersCollection.find(query).toArray();
         res.status(200).send(result);
@@ -221,7 +240,7 @@ async function run() {
       }
     });
 
-    app.post("/orders", async (req, res) => {
+    app.post("/orders", verify, async (req, res) => {
       try {
         const newOrder = req.body;
 
@@ -259,7 +278,7 @@ async function run() {
       }
     });
 
-    app.delete("/orders/:id", async (req, res) => {
+    app.delete("/orders/:id", verify, async (req, res) => {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
