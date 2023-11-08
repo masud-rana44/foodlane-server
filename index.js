@@ -38,7 +38,6 @@ async function run() {
       try {
         const newUser = req.body;
         const result = await usersCollection.insertOne(newUser);
-        console.log("Got new user", req.body);
         res.status(201).send(result);
       } catch (error) {
         console.log("USER_POST", error);
@@ -123,7 +122,6 @@ async function run() {
       try {
         const newFood = req.body;
         const result = await foodsCollection.insertOne(newFood);
-        console.log("Got new food", req.body);
         res.status(201).send(result);
       } catch (error) {
         console.log("FOOD_POST", error);
@@ -159,7 +157,6 @@ async function run() {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
         const result = await foodsCollection.deleteOne(query);
-        console.log("Deleted food", result);
         res.status(204).send(result);
       } catch (error) {
         console.log("FOOD_DELETE", error);
